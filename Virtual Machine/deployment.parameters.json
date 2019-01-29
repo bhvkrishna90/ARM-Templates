@@ -1,0 +1,21 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "vmname": {
+            "value": "myvmtest"
+        },
+        "vmusername": {
+            "value": "adminuser"
+        },
+        "vmpassword": {
+            "value": "Pa$$word@1234"
+        },
+        "location": {
+            "value": "East US"
+        },
+        "vmsize": {
+            "value": "Standard_B1s"
+        }
+    }
+}
