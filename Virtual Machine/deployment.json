@@ -1,0 +1,263 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "vmname" : {
+            "type": "string",
+            "defaultValue": "myvmtest",
+            "metadata": {
+                "description" : "Enter Virtual Machine Name"
+            }
+        },
+        "vmusername" :{
+            "type": "string",
+            "defaultValue": "adminuser",
+            "allowedValues": ["adminuser","krishna","administ"],
+            "maxLength": 10,
+            "minLength": 7,
+            "metadata": {
+                "description": "Username of Virtual Machine to login"
+            }
+        },
+        "vmpassword" : {
+            "type": "securestring",
+            "defaultValue": "Pa$$word@1234",
+            "maxLength": 12,
+            "minLength": 8,
+            "metadata": {
+                "description" : "Password of Virtual Machine to login"
+            }
+        },
+        "location" : {
+            "type": "string",
+            "defaultValue": "East US",
+            "allowedValues": ["East US", "East US 2", "Central US", "North Central US", "South Central US", "West Central US", "West US", "West US 2"],
+            "metadata": {
+                "description" : "Choose Location for the deployment"
+            }
+        },
+        "vmsize" : {
+            "type": "string",
+            "defaultValue": "Standard_B1s",
+            "allowedValues": ["Standard_B1s", "Standard_B1ms", "Standard_D2s_v3", "Standard_D4s_v3", "Standard_D2_v3", "Standard_D4_v3", "Standard_DS1_v2", "Standard_DS2_v2"],
+            "metadata": {
+                "description" : "Choose Size of the Virtual Machine"
+            }
+        }
+      },
+    "variables": {
+        "windowsImage": {
+            "publisher": "MicrosoftWindowsServer",
+            "offer": "WindowsServer",
+            "sku": "2016-Datacenter",
+            "version": "latest"
+          },
+        "Linuximage" : {
+            "publisher": "Canonical",
+            "offer": "UbuntuServer",
+            "sku": "16.04.0-LTS",
+            "version": "latest"
+        },
+        "network" : {
+            "virtualNetworkName": "MyVNET",
+            "addressPrefix": "10.0.0.0/16",
+            "subnetName": "Subnet",
+            "appsubnetPrefix": "10.0.1.0/24",
+            "dbsubnetprefix" : "10.0.2.0/24"
+        },
+        "pip" : {
+            "publicIPAddressName": "[concat(parameters('vmname'), '-pip')]",
+            "publicIPAddressType": "Dynamic",
+            "dnsLabelPrefix" : "[concat(parameters('vmname'), variables('suffix'))]"
+        },
+        "storage" : {
+            "storagename" : "storage",
+            "storageAccountType": "Standard_LRS"
+        },
+        "nicName": "[concat(parameters('vmname'), '-nic')]",
+        "nsgname": "nsg",
+        "suffix" : "[substring(uniqueString(resourceGroup().id), 0, 5)]"
+        
+      },
+    "functions": [  ],
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "name": "vmstorage",
+            "apiVersion": "2018-07-01",
+            "location" : "[parameters('location')]",
+            "sku" : {
+                "name" : "Standard_LRS"
+            },
+            "kind" : "StorageV2",
+            "properties" : {
+                "accessTier" : "Cool",
+                "supportsHttpsTrafficOnly" :false
+            }
+        },
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "apiVersion": "2018-08-01",
+            "name": "[variables('pip').publicIPAddressName]",
+            "location": "[parameters('location')]",
+            "properties": {
+              "publicIPAllocationMethod": "[variables('pip').publicIPAddressType]",
+              "dnsSettings": {
+                "domainNameLabel": "[variables('pip').dnsLabelPrefix]"
+              }
+            }
+          },
+        {
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "name": "[concat(parameters('vmname'),variables('nsgname'))]",
+            "apiVersion": "2018-08-01",
+            "location" : "[parameters('location')]",
+            "properties" : {
+                "securityRules":[
+                    {
+                        "name": "Allow-RDP-In",
+                        "properties" : {
+                            "access" : "Allow",
+                            "description": "Allow RDP",
+                            "priority" : 1000,
+                            "direction" : "Inbound",
+                            "protocol" : "*",
+                            "sourceAddressPrefix": "*",
+                            "sourcePortRange": "*",
+                            "destinationAddressPrefix": "*",
+                            "destinationPortRange": "3389"
+                        }
+                    },
+                    {
+                        "name": "Allow-SSH-in",
+                        "properties" : {
+                            "access" : "Allow",
+                            "description": "Allow SSH",
+                            "priority" : 1001,
+                            "direction" : "Inbound",
+                            "protocol" : "*",
+                            "sourceAddressPrefix": "*",
+                            "sourcePortRange": "*",
+                            "destinationAddressPrefix": "*",
+                            "destinationPortRange": "22"
+                        }
+                    }
+                ]        
+            }
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworks",
+            "name": "[variables('network').virtualNetworkName]",
+            "apiVersion": "2018-08-01",
+            "location" : "[parameters('location')]",
+            "properties" : {
+                "addressSpace" : {
+                    "addressPrefixes" : "[variables('network').addressPrefix]"
+                },
+                "subnets" :[
+                    {
+                        "name": "Applications",
+                        "properties" :{
+                            "addressPrefix": "[variables('network').appsubnetPrefix]",
+                            "networkSecurityGroup" :{
+                                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', concat(parameters('vmname'),variables('nsgname')))]"
+                            }
+                        }
+                    },
+                    {
+                        "name": "Database",
+                        "properties" : {
+                            "addressPrefix": "[variables('network').dbsubnetprefix]",
+                            "networkSecurityGroup" : {
+                                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', concat(parameters('vmname'),variables('nsgname')))]"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2018-08-01",
+            "name": "[variables('nicName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+              "[resourceId('Microsoft.Network/publicIPAddresses/', variables('pip').publicIPAddressName)]",
+              "[resourceId('Microsoft.Network/virtualNetworks/', variables('network').virtualNetworkName)]"
+            ],
+            "properties": {
+              "ipConfigurations": [
+                {
+                  "name": "ipconfig1",
+                  "properties": {
+                    "privateIPAllocationMethod": "Dynamic",
+                    "publicIPAddress": {
+                      "id": "[resourceId('Microsoft.Network/publicIPAddresses',variables('pip').publicIPAddressName)]"
+                    },
+                    "subnet": {
+                      "id": "[variables('network').appsubnetPrefix]"
+                    }
+                  }
+                }
+              ]
+            }
+        },
+        {
+            "apiVersion": "2018-06-01",
+            "type": "Microsoft.Compute/virtualMachines",
+            "name": "[parameters('vmName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+              "[resourceId('Microsoft.Storage/storageAccounts/', variables('storage').storagename)]",
+              "[resourceId('Microsoft.Network/networkInterfaces/', variables('nicName'))]"
+            ],
+            "properties": {
+              "hardwareProfile": {
+                "vmSize": "[parameters('vmsize')]"
+              },
+              "osProfile": {
+                "computerName": "[parameters('vmName')]",
+                "adminUsername": "[parameters('vmusername')]",
+                "adminPassword": "[parameters('vmpassword')]"
+              },
+              "storageProfile": {
+                "imageReference": {
+                  "publisher": "[variables('windowsImage').publisher]",
+                  "offer": "[variables('windowsImage').offer]",
+                  "sku": "[variables('windowsImage').sku]",
+                  "version": "[variables('windowsImage').version]"
+                },
+                "osDisk": {
+                  "createOption": "FromImage"
+                },
+                "dataDisks": [
+                  {
+                    "diskSizeGB": 30,
+                    "lun": 0,
+                    "createOption": "Empty"
+                  }
+                ]
+              },
+              "networkProfile": {
+                "networkInterfaces": [
+                  {
+                    "id": "[resourceId('Microsoft.Network/networkInterfaces',variables('nicName'))]"
+                  }
+                ]
+              },
+              "diagnosticsProfile": {
+                  "bootDiagnostics": {
+                      "enabled": true,
+                      "storageUri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storage').storagename), '2016-01-01').primaryEndpoints.blob)]"
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": { 
+        "hostname": {
+            "type": "string",
+            "value": "[reference(variables('pip').publicIPAddressName).dnsSettings.fqdn]"
+        }
+     }
+}
