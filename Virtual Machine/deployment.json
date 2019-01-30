@@ -60,9 +60,10 @@
         },
         "network" : {
             "virtualNetworkName": "MyVNET",
-            "addressPrefix": "10.0.0.0/16",
-            "subnetName": "Subnet",
+            "vnetaddressPrefix": "10.0.0.0/16",
+            "appsubnetName": "appSubnet",
             "appsubnetPrefix": "10.0.1.0/24",
+            "dbSubnetName" : "dbSubnet",
             "dbsubnetprefix" : "10.0.2.0/24"
         },
         "pip" : {
@@ -71,11 +72,11 @@
             "dnsLabelPrefix" : "[concat(parameters('vmname'), variables('suffix'))]"
         },
         "storage" : {
-            "storagename" : "storage",
+            "storagename" : "storagekri",
             "storageAccountType": "Standard_LRS"
         },
         "nicName": "[concat(parameters('vmname'), '-nic')]",
-        "nsgname": "nsg",
+        "nsgname": "vmkrinsg",
         "suffix" : "[substring(uniqueString(resourceGroup().id), 0, 5)]"
         
       },
@@ -83,7 +84,7 @@
     "resources": [
         {
             "type": "Microsoft.Storage/storageAccounts",
-            "name": "vmstorage",
+            "name": "[variables('storage').storagename]",
             "apiVersion": "2018-07-01",
             "location" : "[parameters('location')]",
             "sku" : {
@@ -95,6 +96,7 @@
                 "supportsHttpsTrafficOnly" :false
             }
         },
+        
         {
             "type": "Microsoft.Network/publicIPAddresses",
             "apiVersion": "2018-08-01",
@@ -109,7 +111,7 @@
           },
         {
             "type": "Microsoft.Network/networkSecurityGroups",
-            "name": "[concat(parameters('vmname'),variables('nsgname'))]",
+            "name": "[variables('nsgname')]",
             "apiVersion": "2018-08-01",
             "location" : "[parameters('location')]",
             "properties" : {
@@ -152,25 +154,21 @@
             "location" : "[parameters('location')]",
             "properties" : {
                 "addressSpace" : {
-                    "addressPrefixes" : "[variables('network').addressPrefix]"
+                    "addressPrefixes" : [
+                        "[variables('network').vnetaddressPrefix]"
+                    ]
                 },
                 "subnets" :[
                     {
-                        "name": "Applications",
+                        "name": "[variables('network').appsubnetName]",
                         "properties" :{
-                            "addressPrefix": "[variables('network').appsubnetPrefix]",
-                            "networkSecurityGroup" :{
-                                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', concat(parameters('vmname'),variables('nsgname')))]"
-                            }
+                            "addressPrefix": "[variables('network').appsubnetPrefix]"
                         }
                     },
                     {
-                        "name": "Database",
+                        "name": "[variables('network').dbSubnetName]",
                         "properties" : {
-                            "addressPrefix": "[variables('network').dbsubnetprefix]",
-                            "networkSecurityGroup" : {
-                                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', concat(parameters('vmname'),variables('nsgname')))]"
-                            }
+                            "addressPrefix": "[variables('network').dbsubnetprefix]"
                         }
                     }
                 ]
@@ -184,6 +182,7 @@
             "dependsOn": [
               "[resourceId('Microsoft.Network/publicIPAddresses/', variables('pip').publicIPAddressName)]",
               "[resourceId('Microsoft.Network/virtualNetworks/', variables('network').virtualNetworkName)]"
+              
             ],
             "properties": {
               "ipConfigurations": [
@@ -195,11 +194,14 @@
                       "id": "[resourceId('Microsoft.Network/publicIPAddresses',variables('pip').publicIPAddressName)]"
                     },
                     "subnet": {
-                      "id": "[variables('network').appsubnetPrefix]"
+                      "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('network').virtualNetworkName, variables('network').appsubnetName)]"
                     }
                   }
                 }
-              ]
+              ],
+              "networkSecurityGroup" : {
+                  "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgname'))]"
+              }
             }
         },
         {
